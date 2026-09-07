@@ -1,8 +1,10 @@
 from fastapi import APIRouter
 
+from wisp_backend.schemas import HealthResponse
+
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> HealthResponse:
+    return HealthResponse()

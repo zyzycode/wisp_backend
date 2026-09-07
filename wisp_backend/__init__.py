@@ -1,1 +1,1 @@
-"""Local OpenAI-compatible proxy for xAI."""
+"""Provider-independent Wisp chat backend."""

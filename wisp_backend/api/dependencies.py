@@ -1,7 +1,7 @@
 from fastapi import Request
 
-from wisp_backend.proxy import ChatProxy
+from wisp_backend.service import ChatService
 
 
-def get_chat_proxy(request: Request) -> ChatProxy:
-    return request.app.state.chat_proxy
+def get_chat_service(request: Request) -> ChatService:
+    return request.app.state.chat_service
