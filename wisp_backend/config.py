@@ -27,9 +27,9 @@ class Settings(BaseModel):
         default_factory=lambda: {"default": AssistantSettings()}, min_length=1,
     )
     base_url: str = "https://api.groq.com/openai/v1/"
-    request_timeout: float = Field(default=3600, gt=0)
-    connect_timeout: float = Field(default=15, gt=0)
-    pool_timeout: float = Field(default=15, gt=0)
+    request_timeout: float = Field(default=10, gt=0)
+    connect_timeout: float = Field(default=3, gt=0)
+    pool_timeout: float = Field(default=3, gt=0)
 
     @field_validator("api_key")
     @classmethod

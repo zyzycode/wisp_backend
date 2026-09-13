@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -9,7 +12,7 @@ from wisp_backend.config import Settings
 
 @pytest.fixture
 def body():
-    return {"messages": [{"role": "user", "content": "hi"}]}
+    return json.loads((Path(__file__).parent / "fixtures/request.local.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture
@@ -21,5 +24,12 @@ def app_factory():
 
 @pytest.fixture
 def client_factory(app_factory):
-    # Use as a context manager so every test runs startup and shutdown.
     return lambda handler: TestClient(app_factory(handler))
+
+
+@pytest.fixture
+def completion():
+    def factory(reply=None, **extra):
+        return {"choices": [{"message": {"content": json.dumps(reply if reply is not None else {"text": "Привет!"})},
+                              "finish_reason": "stop"}], **extra}
+    return factory
