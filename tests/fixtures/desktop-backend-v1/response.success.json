@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "requestId": "02d80270-1a72-47c9-a713-335b872ad24b",
+  "text": "Привет! Чем займёмся?",
+  "decision": { "behavior": "respond", "tone": "warm", "mood": "happy", "confidence": 0.9 }
+}

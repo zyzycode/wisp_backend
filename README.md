@@ -1,51 +1,71 @@
 # Wisp backend
 
-Backend для общения фронта с разными LLM API. Выбор провайдера, модели
-и параметры запроса остаются на сервере. Сейчас подключён Groq.
+Python/FastAPI service for the Wisp desktop's cloud LLM calls. The backend owns
+system prompts, provider credentials and the reviewed Groq model profile. Desktop
+owns individual memory, personality and local behavior.
 
-Реализован `POST /v1/chat` по [Desktop ↔ Backend v1](docs/desktop-backend-v1.md):
-JSON без стриминга, серверный system prompt, проверка запросов и модельного вывода.
-Ответ содержит `version`, исходный `requestId`, `text` и необязательный `decision`.
-Квоты и идемпотентность остаются несогласованными и не реализованы.
+`POST /v1/chat` implements [Desktop ↔ Backend v1](docs/desktop-backend-v1.md): bounded
+JSON, validated model output, no streaming. Admission adds deployment-wide quotas,
+durable SQLite usage accounting and bounded ID deduplication without changing the wire.
+This supports a closed alpha; public auth/deployment and live acceptance are separate.
 
-Предыдущие `/v1/chat/completions`, `/v1/assistants` и SSE удалены.
-Провайдер и модель выбираются серверным профилем `default`.
-Общий deadline вызова — 10 секунд, таймаут соединения — 3 секунды.
+`POST /v2/chat` explicitly adds [bounded selected memory](docs/desktop-backend-v2.md):
+five registry facts, up to two recalled episodes and one learned preference. One Groq
+call returns text and optional evidence-bound proposals; desktop validates and persists
+facts independently. V1 still rejects memory. Both versions share quotas and durable
+request IDs; changing the endpoint does not obtain a fresh budget or replay another version.
+Memory is untrusted inference context, never a server-side user profile.
 
-## Запуск
+`POST /v3/events` adds a text-only remark for a supplied completed cursor-game event
+or already-started SocialBid; it creates no activity or background schedule. Events
+use a 500 ms body limit, 2.5 s total deadline and at most 1024 output tokens.
+`POST /v3/chat` carries one optional previous AI initiative beside the unchanged v2
+memory/dialogue shape. All four routes share the same budgets and request-ID namespace.
+See the [v3 contract and desktop responsibilities](docs/desktop-backend-v3.md).
 
-Нужен Python 3.10+. Создайте `.env` по примеру `.env.example` и укажите
-`GROQ_API_KEY`. Запуск из PowerShell в папке проекта:
+## Install and run
+
+The exact dependency snapshot is verified on Python 3.10. In PowerShell:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe main.py
 ```
 
-Изменения Python-кода подхватываются автоматически. После изменения `.env`
-нужен перезапуск. [Swagger](http://127.0.0.1:8000/docs) доступен после запуска.
+Configure `GROQ_API_KEY` using your server environment or local `.env`. Do not commit
+credentials. `WISP_LEDGER_PATH` points to persistent state **outside the checkout**;
+the default is `~/.local/state/wisp-backend/ledger.sqlite`. Alpha uses one worker,
+no reload, no access logging:
 
-## Структура
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --no-access-log
+```
 
-- `api/` — HTTP-маршруты.
-- `schemas.py` — текущие схемы запросов и ответов.
-- `service.py` — выбор профиля и провайдера.
-- `providers/` — адаптеры LLM API.
-- `config.py`, `application.py` — настройки и сборка приложения.
+The existing `python main.py` launcher reloads in development; do not use it for alpha.
+[Swagger](http://127.0.0.1:8000/docs) is available while running. Remote alpha requires
+private ingress plus HTTPS and verified provider ZDR; no endpoint is published here.
 
-Код находится в `wisp_backend/`, тесты — в `tests/`.
+Defaults are 12 admitted requests/minute, 2 concurrent, 100/day and 1,000,000 tokens/day.
+Set `WISP_LIMITS_JSON` to override approved positive integer limits. Each attempt reserves
+131,072 tokens before dispatch, then refunds against confirmed usage. Unknown usage
+keeps full conservative charge. See [engineering/operator rules](docs/ENGINEERING.md)
+for deadline, cancellation, retention, recovery, supported profiles and security checks.
 
-## Тесты
+## Structure and tests
+
+`wisp_backend/api/` owns HTTP boundaries; `service.py` owns orchestration;
+`providers/` owns Groq integration; `contracts.py` and `ledger.py` own internal accounting.
+No server dialogue history or vector database is introduced.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m pytest -v
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -m pytest -q
+git diff --check
 ```
 
-Тесты не обращаются к реальным LLM API.
-
-Локальный тестовый пример: `tests/fixtures/request.local.json`.
-Три общих JSON fixtures из документа фронта пока не предоставлены;
-локальный пример не считается их копией. Ссылки на desktop-файлы в контракте
-сохранены как ссылки исходного документа.
+Tests mock provider calls and use isolated temporary ledgers. Shared
+[v1 fixtures](tests/fixtures/desktop-backend-v1/), [v2 fixtures](tests/fixtures/desktop-backend-v2/)
+and [v3 fixtures](tests/fixtures/desktop-backend-v3/) are preserved byte-for-byte and
+verified through the HTTP route. `tests/fixtures/request.local.json` additionally covers
+optional boredom omission. No real credentials or LLM requests are needed for tests.

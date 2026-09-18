@@ -1,0 +1,77 @@
+{
+  "version": 3,
+  "requestId": "dbb40246-fc9f-4f59-a0a6-6b36a63259e6",
+  "event": {
+    "type": "user_message"
+  },
+  "stream": false,
+  "locale": "ru",
+  "character": {
+    "needs": {
+      "energy": 80,
+      "attention": 50,
+      "play": 60,
+      "comfort": 80,
+      "boredom": 10
+    },
+    "relationship": {
+      "friendship": 100,
+      "love": 0,
+      "loveUnlocked": false
+    },
+    "personality": {
+      "presetId": "default",
+      "aiSelfConcept": "Я Wisp, твой компаньон.",
+      "traits": {
+        "shyness": 0.4,
+        "playfulness": 0.6,
+        "sensitivity": 0.5,
+        "boldness": 0.4
+      }
+    },
+    "intimacy": {
+      "flirtiness": 0,
+      "romanticCharge": 0,
+      "userConsentEnabled": false
+    },
+    "synthesizedTone": "curious"
+  },
+  "memory": {
+    "facts": [
+      {
+        "key": "user.display_name",
+        "value": "Аня"
+      },
+      {
+        "key": "user.reply_style",
+        "value": "brief"
+      }
+    ],
+    "episodes": [
+      {
+        "kind": "cursor_game",
+        "outcome": "caught",
+        "executedMs": 1900,
+        "occurredAt": "2026-09-18T08:30:00.000Z"
+      }
+    ],
+    "characterPreferences": [
+      {
+        "key": "activity.cursor_game",
+        "value": 12,
+        "confidence": 0.5
+      }
+    ]
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Да, давай."
+    }
+  ],
+  "previousInitiative": {
+    "kind": "social_bid",
+    "text": "Хочешь поговорить о музыке?",
+    "createdAt": "2026-09-18T09:00:01.000Z"
+  }
+}

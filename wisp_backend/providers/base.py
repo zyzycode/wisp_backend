@@ -1,9 +1,10 @@
-"""Internal provider port; does not expose provider envelopes to HTTP callers."""
+"""Internal provider port, separate from the desktop wire."""
 from typing import Protocol
 
 from wisp_backend.config import AssistantSettings
-from wisp_backend.schemas import ModelReply
+from wisp_backend.contracts import ProviderResult, ReplyContext
 
 
 class Provider(Protocol):
-    async def complete(self, messages: list[dict[str, str]], settings: AssistantSettings) -> ModelReply: ...
+    async def complete(self, messages: list[dict[str, str]], settings: AssistantSettings,
+                       timeout: float, reply_context: ReplyContext = ReplyContext()) -> ProviderResult: ...

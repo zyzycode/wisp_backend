@@ -10,9 +10,10 @@ ERROR_STATUS = {
 
 
 class ServiceError(Exception):
-    def __init__(self, code: ErrorCode):
+    def __init__(self, code: ErrorCode, retry_after_ms: int | None = None):
         super().__init__(code)
         self.code = code
+        self.retry_after_ms = retry_after_ms
         self.status = ERROR_STATUS[code]
 
 

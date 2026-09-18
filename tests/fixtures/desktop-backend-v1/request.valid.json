@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "requestId": "02d80270-1a72-47c9-a713-335b872ad24b",
+  "event": { "type": "user_message" },
+  "messages": [{ "role": "user", "content": "Привет!" }],
+  "stream": false,
+  "locale": "ru",
+  "character": {
+    "needs": { "energy": 80, "attention": 50, "play": 60, "comfort": 80, "boredom": 10 },
+    "relationship": { "friendship": 100, "love": 0, "loveUnlocked": false },
+    "personality": {
+      "presetId": "default",
+      "aiSelfConcept": "Я Wisp, твой компаньон.",
+      "traits": { "shyness": 0.4, "playfulness": 0.6, "sensitivity": 0.5, "boldness": 0.4 }
+    },
+    "intimacy": { "flirtiness": 0, "romanticCharge": 0, "userConsentEnabled": false },
+    "synthesizedTone": "curious"
+  }
+}
