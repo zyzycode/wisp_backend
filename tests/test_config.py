@@ -58,7 +58,27 @@ def test_explicit_settings_validation(kwargs):
 
 def test_server_profiles_from_environment(env_values):
     env_values.update(GROQ_API_KEY="key", ASSISTANTS_JSON=
-        '{"default":{"provider":"groq","model":"internal-model","max_output_tokens":256}}')
+        '{"default":{"provider":"groq","model":"openai/gpt-oss-20b","max_output_tokens":256}}')
     settings = Settings.from_env()
-    assert settings.assistants["default"].model == "internal-model"
+    assert settings.assistants["default"].model == "openai/gpt-oss-20b"
     assert settings.assistants["default"].max_output_tokens == 256
+
+
+@pytest.mark.parametrize('profile', [
+    {'model':'unreviewed'}, {'provider':'other'}, {'max_output_tokens':4097},
+    {'max_output_tokens': True},
+])
+def test_unreviewed_profile_or_limits_rejected(profile):
+    with pytest.raises(ValidationError):
+        Settings(api_key=SecretStr('test'), assistants={'default':profile})
+
+
+def test_operator_limits_and_ledger_path(env_values):
+    env_values.update(GROQ_API_KEY='test', WISP_LEDGER_PATH='/tmp/operator.sqlite',
+        WISP_LIMITS_JSON='{"rate_limit":4,"concurrent_limit":1,"daily_requests":8,"daily_tokens":131072}')
+    config = Settings.from_env()
+    assert config.ledger_path == Path('/tmp/operator.sqlite')
+    assert config.ledger.rate_limit == 4
+    for invalid in ({'rate_limit':True}, {'daily_tokens':131071}, {'concurrent_limit':0}, {'extra':1}):
+        with pytest.raises(ValidationError):
+            Settings(api_key=SecretStr('test'), ledger=invalid)

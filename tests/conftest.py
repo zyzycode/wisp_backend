@@ -16,9 +16,10 @@ def body():
 
 
 @pytest.fixture
-def app_factory():
+def app_factory(tmp_path):
+    from uuid import uuid4
     def factory(handler):
-        return create_app(httpx.MockTransport(handler), settings=Settings(api_key=SecretStr("test-key")))
+        return create_app(httpx.MockTransport(handler), settings=Settings(api_key=SecretStr("test-key"), ledger_path=tmp_path / (str(uuid4()) + ".sqlite")))
     return factory
 
 

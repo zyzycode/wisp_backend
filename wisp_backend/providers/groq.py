@@ -1,9 +1,9 @@
-"""Groq request mapping and bounded model-output validation."""
+"""Bounded Groq output; retain safe usage even when model content is invalid."""
 import httpx
 from pydantic import ValidationError
 
 from wisp_backend.config import AssistantSettings
-from wisp_backend.errors import ServiceError, invalid_response
+from wisp_backend.contracts import ProviderResult, Usage
 from wisp_backend.json_codec import decode_json
 from wisp_backend.schemas import ModelReply
 
@@ -14,7 +14,8 @@ class GroqProvider:
     def __init__(self, client: httpx.AsyncClient):
         self.client = client
 
-    async def complete(self, messages: list[dict[str, str]], settings: AssistantSettings) -> ModelReply:
+    async def complete(self, messages: list[dict[str, str]], settings: AssistantSettings,
+                       timeout: float) -> ProviderResult:
         payload = {
             "model": settings.model, "messages": messages, "stream": False,
             "max_completion_tokens": settings.max_output_tokens,
@@ -22,28 +23,31 @@ class GroqProvider:
         }
         if settings.temperature is not None:
             payload["temperature"] = settings.temperature
+        usage = None
         try:
-            async with self.client.stream("POST", "chat/completions", json=payload) as response:
-                # Provider throttling is not our own deployment admission policy.
+            budget = httpx.Timeout(timeout, connect=min(3, timeout, self.client.timeout.connect),
+                                   pool=min(3, timeout, self.client.timeout.pool))
+            async with self.client.stream("POST", "chat/completions", json=payload, timeout=budget) as response:
                 if not response.is_success:
-                    raise ServiceError("upstream_unavailable")
+                    return ProviderResult(error="upstream_unavailable")
                 content = bytearray()
                 async for chunk in response.aiter_bytes():
                     if len(content) + len(chunk) > MAX_UPSTREAM_BYTES:
-                        raise invalid_response()
+                        return ProviderResult(error="invalid_model_response")
                     content.extend(chunk)
                 try:
                     data = decode_json(content.decode("utf-8"))
+                    usage = Usage.parse(data.get("usage")) if isinstance(data, dict) else None
                     choice = data["choices"][0]
                     if choice["finish_reason"] != "stop":
-                        raise invalid_response()
+                        return ProviderResult(usage=usage, error="invalid_model_response")
                     proposed = choice["message"]["content"]
                     if not isinstance(proposed, str):
-                        raise invalid_response()
-                    return ModelReply.model_validate(decode_json(proposed))
+                        return ProviderResult(usage=usage, error="invalid_model_response")
+                    return ProviderResult(ModelReply.model_validate(decode_json(proposed)), usage)
                 except (ValueError, KeyError, IndexError, TypeError, ValidationError, RecursionError):
-                    raise invalid_response() from None
+                    return ProviderResult(usage=usage, error="invalid_model_response")
         except httpx.TimeoutException:
-            raise ServiceError("upstream_timeout") from None
+            return ProviderResult(error="upstream_timeout")
         except httpx.RequestError:
-            raise ServiceError("upstream_unavailable") from None
+            return ProviderResult(error="upstream_unavailable")

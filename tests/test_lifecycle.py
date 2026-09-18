@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from wisp_backend.api.dependencies import get_chat_service
 from wisp_backend.config import AssistantSettings
 from wisp_backend.schemas import ModelReply
+from wisp_backend.contracts import ProviderResult
 from wisp_backend.service import ChatService
 
 
@@ -53,23 +54,25 @@ def test_response_closed_and_read_bounded(client_factory, body, chunks, error, s
 
 def test_provider_swap_and_total_deadline(app_factory, body):
     class OtherProvider:
-        async def complete(self, messages, settings):
+        async def complete(self, messages, settings, timeout):
             assert settings.model == "internal-other-model"
-            return ModelReply(text="Other")
+            return ProviderResult(ModelReply(text="Other"))
 
     app = app_factory(lambda _: pytest.fail("Wrong provider"))
-    service = ChatService({"other": OtherProvider()}, {"default": AssistantSettings(provider="other", model="internal-other-model")})
-    app.dependency_overrides[get_chat_service] = lambda: service
     with TestClient(app) as client:
+        service = ChatService({"other": OtherProvider()}, {"default": AssistantSettings(provider="other", model="internal-other-model")}, app.state.chat_service.ledger)
+        app.dependency_overrides[get_chat_service] = lambda: service
         assert client.post("/v1/chat", json=body).json()["text"] == "Other"
 
         class SlowProvider:
             cancelled = False
-            async def complete(self, messages, settings):
+            async def complete(self, messages, settings, timeout):
                 try:
                     await asyncio.sleep(10)
                 finally:
                     self.cancelled = True
+        from uuid import uuid4
+        body["requestId"] = str(uuid4())
         slow = SlowProvider()
         service.providers["other"] = slow
         service.deadline = .01
@@ -80,4 +83,4 @@ def test_provider_swap_and_total_deadline(app_factory, body):
 
 def test_unknown_provider_fails_at_startup():
     with pytest.raises(ValueError, match="unregistered"):
-        ChatService({}, {"default": AssistantSettings(provider="missing")})
+        ChatService({}, {"default": AssistantSettings(provider="missing")}, None)
