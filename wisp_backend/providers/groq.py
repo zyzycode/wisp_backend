@@ -3,9 +3,10 @@ import httpx
 from pydantic import ValidationError
 
 from wisp_backend.config import AssistantSettings
-from wisp_backend.contracts import ProviderResult, Usage
+from wisp_backend.contracts import ProviderResult, Usage, ReplyContext
 from wisp_backend.json_codec import decode_json
 from wisp_backend.schemas import ModelReply
+from wisp_backend.memory_schemas import MemoryModelReply
 
 MAX_UPSTREAM_BYTES = 256 * 1024
 
@@ -15,7 +16,7 @@ class GroqProvider:
         self.client = client
 
     async def complete(self, messages: list[dict[str, str]], settings: AssistantSettings,
-                       timeout: float) -> ProviderResult:
+                       timeout: float, reply_context: ReplyContext = ReplyContext()) -> ProviderResult:
         payload = {
             "model": settings.model, "messages": messages, "stream": False,
             "max_completion_tokens": settings.max_output_tokens,
@@ -44,7 +45,9 @@ class GroqProvider:
                     proposed = choice["message"]["content"]
                     if not isinstance(proposed, str):
                         return ProviderResult(usage=usage, error="invalid_model_response")
-                    return ProviderResult(ModelReply.model_validate(decode_json(proposed)), usage)
+                    model_type = MemoryModelReply if reply_context.version == 2 else ModelReply
+                    reply = model_type.model_validate(decode_json(proposed), context={'evidence_quote': reply_context.evidence_quote})
+                    return ProviderResult(reply, usage)
                 except (ValueError, KeyError, IndexError, TypeError, ValidationError, RecursionError):
                     return ProviderResult(usage=usage, error="invalid_model_response")
         except httpx.TimeoutException:

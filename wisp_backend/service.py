@@ -7,16 +7,18 @@ from pydantic import ValidationError
 from starlette.responses import JSONResponse
 
 from wisp_backend.config import AssistantSettings
-from wisp_backend.contracts import Ledger, Outcome, ProviderResult
+from wisp_backend.contracts import Ledger, Outcome, ProviderResult, ReplyContext
 from wisp_backend.errors import ERROR_STATUS, ServiceError
 from wisp_backend.prompts import build_messages
 from wisp_backend.providers.base import Provider
-from wisp_backend.schemas import ChatRequest, ChatResponse, ErrorDetail, ErrorResponse, ModelReply
+from wisp_backend.schemas import ChatRequest, ChatResponse, ErrorDetail, ErrorResponse, ModelReply, trim_text
+from wisp_backend.memory_schemas import MemoryRequest, MemoryResponse, MemoryModelReply, MemoryErrorResponse
 
 
-def failure(code, request_id, retry_after_ms=None):
+def failure(code, request_id, retry_after_ms=None, version=1):
     error = ErrorDetail(code=code, **({"retryAfterMs": retry_after_ms} if retry_after_ms is not None else {}))
-    body = ErrorResponse(version=1, requestId=request_id, error=error).model_dump(exclude_none=True)
+    response_type = MemoryErrorResponse if version == 2 else ErrorResponse
+    body = response_type(version=version, requestId=request_id, error=error).model_dump(exclude_none=True)
     body['requestId'] = request_id
     return Outcome(ERROR_STATUS[code], JSONResponse(body).body)
 
@@ -61,7 +63,8 @@ class ChatService:
         except ServiceError:
             pass
 
-    async def complete(self, body: ChatRequest, digest: str, started: float) -> Outcome:
+    async def complete(self, body: ChatRequest | MemoryRequest, digest: str, started: float,
+                       legacy_digest: str | None = None) -> Outcome:
         current = asyncio.current_task()
         self.requests.add(current)
         current.add_done_callback(self.requests.discard)
@@ -78,7 +81,7 @@ class ChatService:
                 raise ServiceError("upstream_unavailable")
             if asyncio.get_running_loop().time() >= end:
                 raise ServiceError("upstream_timeout")
-            admission_task = asyncio.create_task(self.ledger.admit(body.requestId, digest))
+            admission_task = asyncio.create_task(self.ledger.admit(body.requestId, digest, legacy_digest))
             done, _ = await asyncio.wait({admission_task}, timeout=end - asyncio.get_running_loop().time())
             if not done:
                 self._track(asyncio.create_task(self._abandoned_admission(admission_task, body.requestId)))
@@ -92,8 +95,13 @@ class ChatService:
             if remaining <= 0:
                 raise ServiceError("upstream_timeout")
             settings = self.assistants['default']
-            provider_task = asyncio.create_task(
-                self.providers[settings.provider].complete(build_messages(body), settings, remaining))
+            provider = self.providers[settings.provider]
+            if isinstance(body, MemoryRequest):
+                call = provider.complete(build_messages(body), settings, remaining,
+                                         ReplyContext(2, trim_text(body.messages[-1].content)))
+            else:
+                call = provider.complete(build_messages(body), settings, remaining)
+            provider_task = asyncio.create_task(call)
             done, _ = await asyncio.wait({provider_task}, timeout=remaining)
             if not done:
                 raise ServiceError("upstream_timeout")
@@ -103,8 +111,12 @@ class ChatService:
             if result.error:
                 raise ServiceError(result.error)
             try:
-                reply = ModelReply.model_validate(result.reply.model_dump(exclude_none=True))
-                response = ChatResponse(version=1, requestId=body.requestId, **reply.model_dump(exclude_none=True))
+                model_type = MemoryModelReply if isinstance(body, MemoryRequest) else ModelReply
+                response_type = MemoryResponse if isinstance(body, MemoryRequest) else ChatResponse
+                context = {'evidence_quote': trim_text(body.messages[-1].content)}
+                reply = model_type.model_validate(result.reply.model_dump(exclude_none=True), context=context)
+                response = response_type.model_validate(
+                    {'version': body.version, 'requestId': body.requestId, **reply.model_dump(exclude_none=True)}, context=context)
                 outcome = Outcome(200, JSONResponse(response.model_dump(exclude_none=True)).body)
                 if len(outcome.body) > 16 * 1024:
                     raise ServiceError("payload_too_large")
@@ -117,9 +129,9 @@ class ChatService:
             if admission_task and not admitted:
                 self._track(asyncio.create_task(self._abandoned_admission(admission_task, body.requestId)))
         except ServiceError as error:
-            outcome = failure(error.code, body.requestId, error.retry_after_ms)
+            outcome = failure(error.code, body.requestId, error.retry_after_ms, version=body.version)
         except Exception:
-            outcome = failure("upstream_unavailable", body.requestId)
+            outcome = failure("upstream_unavailable", body.requestId, version=body.version)
         finally:
             if provider_task and not provider_task.done():
                 provider_task.cancel()
@@ -132,11 +144,11 @@ class ChatService:
                     else:
                         done, _ = await asyncio.wait({settlement}, timeout=max(0, end - asyncio.get_running_loop().time()))
                         if not done:
-                            outcome = failure("upstream_timeout", body.requestId)
+                            outcome = failure("upstream_timeout", body.requestId, version=body.version)
                         else:
                             settlement.result()
                 except ServiceError:
-                    outcome = failure("upstream_unavailable", body.requestId)
+                    outcome = failure("upstream_unavailable", body.requestId, version=body.version)
                 except asyncio.CancelledError:
                     publication_cancelled.set()
                     raise

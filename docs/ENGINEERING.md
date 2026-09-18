@@ -10,6 +10,8 @@ own the API. The [local mirror](desktop-backend-v1.md) changes links only.
 - `api/`: bounded body/schema, HTTP mapping, downstream cancellation.
 - `service.py`: admission, deadline, provider lifetime, terminal settlement.
 - `contracts.py` and `providers/base.py`: internal interfaces declared before implementation.
+- `memory_schemas.py`: strict v2 projection and individually filtered candidate proposals;
+  the original v1 schemas continue to reject memory fields.
 - `providers/groq.py`: bounded upstream response, validated model reply and separate usage.
 - `ledger.py`: one-worker SQLite adapter; all SQLite I/O on worker threads under a process lock.
 - Desktop owns personality, memories, relationships and behavior. No history database,
@@ -102,3 +104,35 @@ See [Groq data policy](https://console.groq.com/docs/your-data).
 
 Tests do not certify private ingress, ZDR, live model output, live provider billing,
 Windows desktop drag/cursor behavior, or production readiness.
+
+## Explicit v2 memory extension (BE-I02)
+
+The [v2 mirror](desktop-backend-v2.md) follows the canonical
+[BACKEND_MEMORY_CONTRACT](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/BACKEND_MEMORY_CONTRACT.md).
+`/v2/chat` requires version2 and a memory object, even when its three arrays are empty.
+V1 routes/envelopes stay version1. No probing, downgrade, additional extraction request,
+new model profile, dependency, or numeric state mutation is introduced.
+
+The system prompt places memory in a separate untrusted user-context message. Current
+explicit correction precedes registry facts, which precede episodes; none can override
+system instructions. Suggestions require one of the five keys and an exact quote of the
+trimmed final user message. Invalid candidates are discarded; repeated keys remove all
+matching elements. Invalid required text/root shape remains a failed model result with
+usage still accounted. Desktop is authoritative for recognizing evidence and committing
+facts; model output never confirms a durable save or deletion.
+
+V2 adds only selected scalar facts, up to two recalled episodes (at most one game),
+and one learned Character preference to the data sent for inference. It sends no local
+source IDs, full database, credentials, screen/files or game event API. The same RAM-only
+response cache may now contain candidate proposals; the same ≤10-minute limit applies.
+Ledger/logs/APM do not store memory content. Reset does not invalidate a remote cached
+response immediately or delete provider metadata. No server deletion endpoint is added.
+Provider ZDR/private HTTPS conditions from the alpha rules remain operator-owned.
+
+A single ledger and all rate/concurrency/day counters serve both routes. New digest
+records use an endpoint-prefixed SHA-256 of method+path+exact body bytes. Existing
+body-only v1 digest records are recognized only on `/v1/chat`, without resetting their
+admission timestamps or TTL; v2 with that ID conflicts. No schema migration or clearing
+of old ledgers is needed. Cache is still lost at restart, with confirmed/uncertain
+charges and late terminal handling unchanged. Shared v1 and v2 fixture hashes and HTTP
+responses are tested alongside cross-version quota/ID and cancellation scenarios.

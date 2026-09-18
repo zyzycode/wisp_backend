@@ -8,7 +8,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from wisp_backend.api import chat, health
+from wisp_backend.api import chat, health, memory
 from wisp_backend.api.boundary import ChatBoundary, error_response
 from wisp_backend.config import Settings
 from wisp_backend.errors import ServiceError
@@ -50,20 +50,22 @@ def create_app(transport: httpx.AsyncBaseTransport | None = None, *, settings: S
 
     @app.exception_handler(ServiceError)
     async def service_error(request, error: ServiceError):
-        return error_response(error.code, getattr(request.state, "request_id", None), error.retry_after_ms)
+        return error_response(error.code, getattr(request.state, "request_id", None), error.retry_after_ms, getattr(request.state, "wire_version", 1))
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, error):
-        return error_response("invalid_request", getattr(request.state, "request_id", None))
+        return error_response("invalid_request", getattr(request.state, "request_id", None), version=getattr(request.state, "wire_version", 1))
 
     app.include_router(health.router)
     app.include_router(chat.router)
+    app.include_router(memory.router)
     # FastAPI's default 422 envelope is not part of this wire contract.
     default_openapi = app.openapi
 
     def openapi():
         spec = default_openapi()
-        spec["paths"]["/v1/chat"]["post"]["responses"].pop("422", None)
+        for route in ("/v1/chat", "/v2/chat"):
+            spec["paths"][route]["post"]["responses"].pop("422", None)
         return spec
     app.openapi = openapi
     return app

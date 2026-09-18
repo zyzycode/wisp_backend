@@ -9,6 +9,13 @@ JSON, validated model output, no streaming. Admission adds deployment-wide quota
 durable SQLite usage accounting and bounded ID deduplication without changing the wire.
 This supports a closed alpha; public auth/deployment and live acceptance are separate.
 
+`POST /v2/chat` explicitly adds [bounded selected memory](docs/desktop-backend-v2.md):
+five registry facts, up to two recalled episodes and one learned preference. One Groq
+call returns text and optional evidence-bound proposals; desktop validates and persists
+facts independently. V1 still rejects memory. Both versions share quotas and durable
+request IDs; changing the endpoint does not obtain a fresh budget or replay another version.
+Memory is untrusted inference context, never a server-side user profile.
+
 ## Install and run
 
 The exact dependency snapshot is verified on Python 3.10. In PowerShell:
@@ -50,7 +57,7 @@ No server dialogue history or vector database is introduced.
 git diff --check
 ```
 
-Tests mock provider calls and use isolated temporary ledgers. The three shared
-[desktop fixtures](tests/fixtures/desktop-backend-v1/) are preserved byte-for-byte and
+Tests mock provider calls and use isolated temporary ledgers. Both sets of shared
+[v1 fixtures](tests/fixtures/desktop-backend-v1/) and [v2 fixtures](tests/fixtures/desktop-backend-v2/) are preserved byte-for-byte and
 verified through the HTTP route. `tests/fixtures/request.local.json` additionally covers
 optional boredom omission. No real credentials or LLM requests are needed for tests.

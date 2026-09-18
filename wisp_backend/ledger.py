@@ -81,17 +81,17 @@ class SQLiteLedger:
             if created + CACHE_TTL <= now:
                 del self.cache[key]
 
-    async def admit(self, request_id: str, digest: str) -> Admission:
-        return await self._run(self._admit, request_id, digest)
+    async def admit(self, request_id: str, digest: str, legacy_digest: str | None = None) -> Admission:
+        return await self._run(self._admit, request_id, digest, legacy_digest)
 
-    def _admit(self, request_id, digest):
+    def _admit(self, request_id, digest, legacy_digest):
         # A single process lock plus SQLite transaction covers every admission decision.
         with self.db:
             now = self._now()
             self._cleanup(now)
             row = self.db.execute("SELECT * FROM entries WHERE id=?", (request_id,)).fetchone()
             if row:
-                if row['digest'] != digest:
+                if row['digest'] != digest and (legacy_digest is None or row['digest'] != legacy_digest):
                     raise ServiceError("request_conflict")
                 if row['state'] == 'flight':
                     raise ServiceError("request_in_progress")

@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "requestId": "79adb4f5-cb29-4e14-a3c8-a9c62d11328e",
+  "text": "Здорово! Помню, как поймала курсор.",
+  "decision": {
+    "behavior": "respond",
+    "tone": "playful",
+    "mood": "happy",
+    "confidence": 0.9
+  },
+  "memoryCandidates": [
+    {
+      "key": "user.cursor_game",
+      "value": "like",
+      "evidenceQuote": "Мне нравится игра с курсором."
+    }
+  ]
+}

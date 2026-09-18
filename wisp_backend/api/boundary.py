@@ -13,8 +13,8 @@ MAX_RESPONSE_BYTES = 16 * 1024
 BODY_TIMEOUT = 2
 
 
-def error_response(code, request_id=None, retry_after_ms=None):
-    outcome = failure(code, request_id, retry_after_ms)
+def error_response(code, request_id=None, retry_after_ms=None, version=1):
+    outcome = failure(code, request_id, retry_after_ms, version)
     return Response(outcome.body, status_code=outcome.status, media_type="application/json")
 
 
@@ -23,13 +23,15 @@ class ChatBoundary:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["path"] != "/v1/chat" or scope["method"] != "POST":
+        if scope["type"] != "http" or scope["path"] not in ("/v1/chat", "/v2/chat") or scope["method"] != "POST":
             return await self.app(scope, receive, send)
         started = asyncio.get_running_loop().time()
+        version = 2 if scope["path"] == "/v2/chat" else 1
+        scope.setdefault("state", {})['wire_version'] = version
         headers = dict(scope["headers"])
         content_type = headers.get(b"content-type", b"").decode("latin-1").lower()
         if content_type.split(";", 1)[0].strip() != "application/json" or headers.get(b"content-encoding", b"identity") != b"identity":
-            return await error_response("invalid_request")(scope, receive, send)
+            return await error_response("invalid_request", version=version)(scope, receive, send)
         chunks = bytearray()
 
         async def read():
@@ -50,16 +52,18 @@ class ChatBoundary:
         if error == "disconnected":
             return
         if error:
-            return await error_response(error)(scope, receive, send)
+            return await error_response(error, version=version)(scope, receive, send)
         try:
             data = decode_json(chunks.decode("utf-8"))
         except (ValueError, UnicodeError, RecursionError):
-            return await error_response("invalid_request")(scope, receive, send)
+            return await error_response("invalid_request", version=version)(scope, receive, send)
         request_id = read_request_id(data)
-        scope.setdefault("state", {}).update(request_id=request_id, started=started,
-                                             digest=hashlib.sha256(chunks).hexdigest())
-        if isinstance(data, dict) and "version" in data and type(data["version"]) is int and data["version"] != 1:
-            return await error_response("unsupported_version", request_id)(scope, receive, send)
+        namespace = scope['method'] + ' ' + scope['path']
+        digest = namespace + ':' + hashlib.sha256(namespace.encode() + b'\0' + chunks).hexdigest()
+        legacy_digest = hashlib.sha256(chunks).hexdigest() if version == 1 else None
+        scope['state'].update(request_id=request_id, started=started, digest=digest, legacy_digest=legacy_digest)
+        if isinstance(data, dict) and "version" in data and type(data["version"]) is int and data["version"] != version:
+            return await error_response("unsupported_version", request_id, version=version)(scope, receive, send)
         delivered = asyncio.Event()
 
         async def replay():

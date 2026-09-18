@@ -1,9 +1,10 @@
 """Internal accounting contracts; never serialized onto the desktop wire."""
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 from threading import Event
 
 from wisp_backend.schemas import ModelReply, ErrorCode
+from wisp_backend.memory_schemas import MemoryModelReply
 
 RESERVATION = 131_072
 
@@ -26,8 +27,14 @@ class Usage:
 
 
 @dataclass(frozen=True)
+class ReplyContext:
+    version: Literal[1, 2] = 1
+    evidence_quote: str | None = None
+
+
+@dataclass(frozen=True)
 class ProviderResult:
-    reply: ModelReply | None = None
+    reply: ModelReply | MemoryModelReply | None = None
     usage: Usage | None = None
     error: ErrorCode | None = None
 
@@ -44,7 +51,7 @@ class Admission:
 
 
 class Ledger(Protocol):
-    async def admit(self, request_id: str, digest: str) -> Admission: ...
+    async def admit(self, request_id: str, digest: str, legacy_digest: str | None = None) -> Admission: ...
     async def settle(self, request_id: str, usage: Usage | None, outcome: Outcome | None,
                      deadline: float | None = None, cancelled: Event | None = None) -> None: ...
     async def maintain(self) -> None: ...
