@@ -1,8 +1,8 @@
 # Backend engineering and operator rules
 
 This repository implements the existing FastAPI/Groq service. The canonical
-[desktop wire and alpha policy](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/BACKEND_API_CONTRACT.md)
-and [BE-A01 gate](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/BE_A01_RESULT.md)
+[desktop wire and alpha policy](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/BACKEND_API_CONTRACT.md)
+and [BE-A01 gate](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/BE_A01_RESULT.md)
 own the API. The [local mirror](desktop-backend-v1.md) changes links only.
 
 ## Boundaries and verification
@@ -108,7 +108,7 @@ Windows desktop drag/cursor behavior, or production readiness.
 ## Explicit v2 memory extension (BE-I02)
 
 The [v2 mirror](desktop-backend-v2.md) follows the canonical
-[BACKEND_MEMORY_CONTRACT](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/BACKEND_MEMORY_CONTRACT.md).
+[BACKEND_MEMORY_CONTRACT](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/BACKEND_MEMORY_CONTRACT.md).
 `/v2/chat` requires version2 and a memory object, even when its three arrays are empty.
 V1 routes/envelopes stay version1. No probing, downgrade, additional extraction request,
 new model profile, dependency, or numeric state mutation is introduced.
@@ -140,7 +140,7 @@ responses are tested alongside cross-version quota/ID and cancellation scenarios
 ## Explicit v3 events and follow-up chat (BE-I03)
 
 The [v3 contract mirror](desktop-backend-v3.md) follows
-[P17-A04](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/P17_A04_RESULT.md).
+[P17-A04](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/P17_A04_RESULT.md).
 `events_schemas.py` owns event and previous-initiative wire shapes; `event_prompts.py`
 owns text-only event instructions. `/v3/events` receives either a current game outcome
 (caught/missed/lost_target, duration and timestamp) or a SocialBid-start timestamp,

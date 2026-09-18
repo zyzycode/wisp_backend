@@ -1,7 +1,7 @@
 # BE-I02 — bounded memory API v2
 
 **TASK:** [backend #2](https://github.com/zyzycode/wisp_backend/issues/2), implementing
-[P15-A02](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/P15_A02_RESULT.md).
+[P15-A02](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/P15_A02_RESULT.md).
 Base commit: `5d74958`; implementation date: 2026-09-18.
 
 **CHANGES:** Added `/v2/chat` alongside v1 with strict memory projection, versioned

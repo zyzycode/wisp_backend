@@ -1,7 +1,7 @@
 # BE-I01 — closed-alpha backend implementation
 
 **TASK:** [wisp_backend #1](https://github.com/zyzycode/wisp_backend/issues/1), implementing
-[BE-A01](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/BE_A01_RESULT.md).
+[BE-A01](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/BE_A01_RESULT.md).
 Base: `275cc8161e5f725681fdacc725708acaf74784b6`; implementation date: 2026-09-18.
 
 **CHANGES:** Declared internal provider/usage/ledger contracts; added stdlib SQLite

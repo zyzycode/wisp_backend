@@ -1,6 +1,6 @@
 # Desktop ↔ Backend v1: wire-контракт
 
-Канонический внешний API. Не зависит от Domain, Electron, локальных Application DTO или выбранного серверного языка. Полные формы полей и enum — [backend-ai-contract.ts](https://github.com/zyzycode/project_wisp/blob/main/src/application/ports/backend-ai-contract.ts): файл самодостаточен, без импортов. Изменение локальных типов персонажа не меняет wire автоматически; преобразование принадлежит desktop adapter. Клиентский lifecycle и ограничения частоты — в [AI Provider](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/AI_PROVIDER_CONTRACT.md#desktop--backend-v1).
+Канонический внешний API. Не зависит от Domain, Electron, локальных Application DTO или выбранного серверного языка. Полные формы полей и enum — [backend-ai-contract.ts](https://github.com/zyzycode/project_wisp/blob/95152d0/src/application/ports/backend-ai-contract.ts): файл самодостаточен, без импортов. Изменение локальных типов персонажа не меняет wire автоматически; преобразование принадлежит desktop adapter. Клиентский lifecycle и ограничения частоты — в [AI Provider](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/AI_PROVIDER_CONTRACT.md#desktop--backend-v1).
 
 ## 1. Транспорт и владение
 
@@ -72,7 +72,7 @@ Success и error — альтернативы, не два ответа одно
 
 ## 5. Закрытая alpha: серверный admission, учёт и повторы
 
-Решение [BE-A01 #52](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/BE_A01_RESULT.md); реализация — отдельный backend #53. Wire v1, его типы и три fixtures не меняются; quota/auth metadata не добавляются. Ниже — целевое поведение, не утверждение о готовности сервера. Клиентские ограничения остаются независимыми.
+Решение [BE-A01 #52](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/BE_A01_RESULT.md); реализация — отдельный backend #53. Wire v1, его типы и три fixtures не меняются; quota/auth metadata не добавляются. Ниже — целевое поведение, не утверждение о готовности сервера. Клиентские ограничения остаются независимыми.
 
 ### Доступ и топология
 

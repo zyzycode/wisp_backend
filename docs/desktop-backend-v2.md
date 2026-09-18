@@ -1,6 +1,6 @@
 # Desktop ↔ Backend v2: ограниченная локальная память
 
-Явное совместимое расширение рядом с v1, решение [P15-A02 #55](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/P15_A02_RESULT.md). Формы — [backend-memory-contract.ts](https://github.com/zyzycode/project_wisp/blob/main/src/application/ports/backend-memory-contract.ts); imports только из автономных v1 wire types. Серверная реализация — отдельная задача в `wisp_backend`, клиентская — #56. Наличие этого документа не означает доступность `/v2/chat` на сервере.
+Явное совместимое расширение рядом с v1, решение [P15-A02 #55](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/P15_A02_RESULT.md). Формы — [backend-memory-contract.ts](https://github.com/zyzycode/project_wisp/blob/95152d0/src/application/ports/backend-memory-contract.ts); imports только из автономных v1 wire types. Серверная реализация — отдельная задача в `wisp_backend`, клиентская — #56. Наличие этого документа не означает доступность `/v2/chat` на сервере.
 
 ## 1. Версия и границы
 
@@ -31,7 +31,7 @@ Backend включает memory в отдельный **untrusted context** бл
 
 Envelope version/requestId/text/optional decision соответствует v1; дополнительно optional `memoryCandidates`, массив0–3. Каждый кандидат — key/value из registry + evidenceQuote1–240 UTF-16 units. evidenceQuote должен побуквенно совпадать с trim последнего user content текущего запроса. Чужие источники, source IDs, confidence, числовые state deltas и операции удаления не входят в предложение.
 
-Provider получает один запрос на ответ и предложения, без отдельного extraction/summary call. Backend контролирует envelope, структурно валидирует candidate fields/limits и source quote. Desktop независимо повторяет wire validation, затем применяет локальный recognizer из [Memory §9](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/MEMORY_ENGINE.md#9-p15-a02-явные-знания-и-простой-recall). Модель предлагает, но не решает, что записать; local recognizer может сохранить точную поддержанную форму и при отсутствии candidate.
+Provider получает один запрос на ответ и предложения, без отдельного extraction/summary call. Backend контролирует envelope, структурно валидирует candidate fields/limits и source quote. Desktop независимо повторяет wire validation, затем применяет локальный recognizer из [Memory §9](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/MEMORY_ENGINE.md#9-p15-a02-явные-знания-и-простой-recall). Модель предлагает, но не решает, что записать; local recognizer может сохранить точную поддержанную форму и при отсутствии candidate.
 
 Невалидный required envelope/text делает весь ответ невалидным. Невалидный decision отбрасывается целиком по v1. Невалидный тип/слишком длинный memoryCandidates → удалить всё поле; невалидный отдельный candidate → удалить этот элемент; все элементы с повторённым key удалить. Валидные text/decision сохраняются. Unknown root keys по-прежнему запрещены. Кандидаты из fallback/старого generation не записываются; локальная проверка user text после успешного сохранения пары остаётся независимой.
 

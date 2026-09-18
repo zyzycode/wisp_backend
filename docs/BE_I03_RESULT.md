@@ -1,7 +1,7 @@
 # BE-I03 — companion events and follow-up chat v3
 
 **TASK:** [backend #3](https://github.com/zyzycode/wisp_backend/issues/3), implementing
-[P17-A04](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/P17_A04_RESULT.md).
+[P17-A04](https://github.com/zyzycode/project_wisp/blob/95152d0/docs/engine/P17_A04_RESULT.md).
 Base commit: `af21c36`; implementation date: 2026-09-18.
 
 **CHANGES:** Added strict `/v3/events` with text-only model output, maximum 1024 output
