@@ -136,3 +136,46 @@ admission timestamps or TTL; v2 with that ID conflicts. No schema migration or c
 of old ledgers is needed. Cache is still lost at restart, with confirmed/uncertain
 charges and late terminal handling unchanged. Shared v1 and v2 fixture hashes and HTTP
 responses are tested alongside cross-version quota/ID and cancellation scenarios.
+
+## Explicit v3 events and follow-up chat (BE-I03)
+
+The [v3 contract mirror](desktop-backend-v3.md) follows
+[P17-A04](https://github.com/zyzycode/project_wisp/blob/main/docs/engine/P17_A04_RESULT.md).
+`events_schemas.py` owns event and previous-initiative wire shapes; `event_prompts.py`
+owns text-only event instructions. `/v3/events` receives either a current game outcome
+(caught/missed/lost_target, duration and timestamp) or a SocialBid-start timestamp,
+plus the same bounded character and memory projections. It accepts no messages,
+local IDs/generations, pointer/geometry/OS data or ignore history. Eligibility, causal
+scheduling, actual game persistence and user preemption remain desktop responsibilities;
+the server does not create, verify from sensors, or prolong a local activity.
+
+The event result contains only version/requestId/text (1..240 UTF-16 units). Additional
+model fields, including decision or memoryCandidates even when null, fail the whole
+model response while preserving confirmed usage. One call uses the reviewed default
+Groq model with output cap at most 1024 (also respecting a lower operator profile cap).
+Total server deadline is 2.5 seconds from route entry, including the 500 ms body budget
+and admission. Ordinary v1/v2/v3 chat retains 10 seconds/2-second body budget. A result
+at the deadline is late. A terminal commit that becomes observable after the deadline
+cannot replay a cached success: the publication cancellation guard also gates RAM replay.
+
+`/v3/chat` reuses v2 validation and candidate rules with version3 and one optional
+previousInitiative (kind, bounded text, calendar-valid createdAt). This is a prior AI
+publication, not a user statement or proof that the user paid attention. Its separate
+untrusted prompt block never supplies candidate evidence; only the last current user
+text does. The model may reference bounded context but cannot promise durable writes.
+There is no synthetic user message, second extraction call, event scheduler or server
+character/history database.
+
+All routes share one ledger, rate/concurrency/day caps, reservation and confirmed/
+uncertain settlement. Method/path/body namespacing makes cross-route ID reuse conflict;
+legacy v1 body-only digest handling remains restricted to v1 and retains its original
+TTL. Cancellation/late usage correction and bounded replay otherwise retain BE-I01 rules.
+
+Allowed transmitted data additionally includes only the event projection and previous
+AI initiative. Neither is written to the ledger or payload logs/APM. A generated event
+or chat reply may remain in the same RAM-only response cache for up to ten minutes;
+IDs/digests/usage and daily aggregates keep the existing 24-hour/30-day retention.
+No server-side event or dialogue history is introduced. Local reset does not erase a
+provider copy/metadata or immediately purge server RAM. The same private HTTPS ingress,
+ZDR verification and operator deletion limitations apply. No live endpoint, provider
+calls or Windows acceptance are certified by mocked code gates.

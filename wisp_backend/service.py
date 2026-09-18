@@ -13,11 +13,16 @@ from wisp_backend.prompts import build_messages
 from wisp_backend.providers.base import Provider
 from wisp_backend.schemas import ChatRequest, ChatResponse, ErrorDetail, ErrorResponse, ModelReply, trim_text
 from wisp_backend.memory_schemas import MemoryRequest, MemoryResponse, MemoryModelReply, MemoryErrorResponse
+from wisp_backend.events_schemas import (
+    EventRequest, EventResponse, EventModelReply, EventErrorResponse, EventAwareChatRequest, EventAwareChatResponse,
+)
+
+EVENT_DEADLINE = 2.5
 
 
 def failure(code, request_id, retry_after_ms=None, version=1):
     error = ErrorDetail(code=code, **({"retryAfterMs": retry_after_ms} if retry_after_ms is not None else {}))
-    response_type = MemoryErrorResponse if version == 2 else ErrorResponse
+    response_type = EventErrorResponse if version == 3 else MemoryErrorResponse if version == 2 else ErrorResponse
     body = response_type(version=version, requestId=request_id, error=error).model_dump(exclude_none=True)
     body['requestId'] = request_id
     return Outcome(ERROR_STATUS[code], JSONResponse(body).body)
@@ -63,7 +68,7 @@ class ChatService:
         except ServiceError:
             pass
 
-    async def complete(self, body: ChatRequest | MemoryRequest, digest: str, started: float,
+    async def complete(self, body: ChatRequest | MemoryRequest | EventRequest, digest: str, started: float,
                        legacy_digest: str | None = None) -> Outcome:
         current = asyncio.current_task()
         self.requests.add(current)
@@ -75,7 +80,7 @@ class ChatService:
         outcome = None
         admission_task = None
         cancelled = False
-        end = started + self.deadline
+        end = started + (min(self.deadline, EVENT_DEADLINE) if isinstance(body, EventRequest) else self.deadline)
         try:
             if self.closing:
                 raise ServiceError("upstream_unavailable")
@@ -89,6 +94,8 @@ class ChatService:
                 raise ServiceError("upstream_timeout")
             admission = admission_task.result()
             if admission.replay:
+                if asyncio.get_running_loop().time() >= end:
+                    raise ServiceError("upstream_timeout")
                 return admission.replay
             admitted = True
             remaining = end - asyncio.get_running_loop().time()
@@ -96,14 +103,16 @@ class ChatService:
                 raise ServiceError("upstream_timeout")
             settings = self.assistants['default']
             provider = self.providers[settings.provider]
-            if isinstance(body, MemoryRequest):
+            if isinstance(body, EventRequest):
+                call = provider.complete(build_messages(body), settings, remaining, ReplyContext(3, None, 'event'))
+            elif isinstance(body, MemoryRequest):
                 call = provider.complete(build_messages(body), settings, remaining,
-                                         ReplyContext(2, trim_text(body.messages[-1].content)))
+                                         ReplyContext(body.version, trim_text(body.messages[-1].content)))
             else:
                 call = provider.complete(build_messages(body), settings, remaining)
             provider_task = asyncio.create_task(call)
-            done, _ = await asyncio.wait({provider_task}, timeout=remaining)
-            if not done:
+            done, _ = await asyncio.wait({provider_task}, timeout=max(0, end - asyncio.get_running_loop().time()))
+            if not done or asyncio.get_running_loop().time() >= end:
                 raise ServiceError("upstream_timeout")
             result = provider_task.result()
             if not isinstance(result, ProviderResult):
@@ -111,9 +120,12 @@ class ChatService:
             if result.error:
                 raise ServiceError(result.error)
             try:
-                model_type = MemoryModelReply if isinstance(body, MemoryRequest) else ModelReply
-                response_type = MemoryResponse if isinstance(body, MemoryRequest) else ChatResponse
-                context = {'evidence_quote': trim_text(body.messages[-1].content)}
+                model_type = (EventModelReply if isinstance(body, EventRequest) else
+                              MemoryModelReply if isinstance(body, MemoryRequest) else ModelReply)
+                response_type = (EventResponse if isinstance(body, EventRequest) else
+                                 EventAwareChatResponse if isinstance(body, EventAwareChatRequest) else
+                                 MemoryResponse if isinstance(body, MemoryRequest) else ChatResponse)
+                context = {'evidence_quote': None if isinstance(body, EventRequest) else trim_text(body.messages[-1].content)}
                 reply = model_type.model_validate(result.reply.model_dump(exclude_none=True), context=context)
                 response = response_type.model_validate(
                     {'version': body.version, 'requestId': body.requestId, **reply.model_dump(exclude_none=True)}, context=context)
@@ -143,7 +155,8 @@ class ChatService:
                         await asyncio.shield(settlement)
                     else:
                         done, _ = await asyncio.wait({settlement}, timeout=max(0, end - asyncio.get_running_loop().time()))
-                        if not done:
+                        if not done or asyncio.get_running_loop().time() >= end:
+                            publication_cancelled.set()
                             outcome = failure("upstream_timeout", body.requestId, version=body.version)
                         else:
                             settlement.result()

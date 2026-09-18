@@ -16,6 +16,13 @@ facts independently. V1 still rejects memory. Both versions share quotas and dur
 request IDs; changing the endpoint does not obtain a fresh budget or replay another version.
 Memory is untrusted inference context, never a server-side user profile.
 
+`POST /v3/events` adds a text-only remark for a supplied completed cursor-game event
+or already-started SocialBid; it creates no activity or background schedule. Events
+use a 500 ms body limit, 2.5 s total deadline and at most 1024 output tokens.
+`POST /v3/chat` carries one optional previous AI initiative beside the unchanged v2
+memory/dialogue shape. All four routes share the same budgets and request-ID namespace.
+See the [v3 contract and desktop responsibilities](docs/desktop-backend-v3.md).
+
 ## Install and run
 
 The exact dependency snapshot is verified on Python 3.10. In PowerShell:
@@ -57,7 +64,8 @@ No server dialogue history or vector database is introduced.
 git diff --check
 ```
 
-Tests mock provider calls and use isolated temporary ledgers. Both sets of shared
-[v1 fixtures](tests/fixtures/desktop-backend-v1/) and [v2 fixtures](tests/fixtures/desktop-backend-v2/) are preserved byte-for-byte and
+Tests mock provider calls and use isolated temporary ledgers. Shared
+[v1 fixtures](tests/fixtures/desktop-backend-v1/), [v2 fixtures](tests/fixtures/desktop-backend-v2/)
+and [v3 fixtures](tests/fixtures/desktop-backend-v3/) are preserved byte-for-byte and
 verified through the HTTP route. `tests/fixtures/request.local.json` additionally covers
 optional boredom omission. No real credentials or LLM requests are needed for tests.

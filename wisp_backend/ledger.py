@@ -20,7 +20,7 @@ class SQLiteLedger:
     def __init__(self, path: Path, policy: LedgerSettings, clock: Callable[[], float]):
         self.path, self.policy, self.clock = path, policy, clock
         self.lock = threading.Lock()
-        self.cache: OrderedDict[str, tuple[float, Outcome]] = OrderedDict()
+        self.cache: OrderedDict[str, tuple[float, Outcome, threading.Event | None]] = OrderedDict()
         self.failed = False
 
     @classmethod
@@ -77,7 +77,7 @@ class SQLiteLedger:
     def _cleanup(self, now):
         self.db.execute("DELETE FROM entries WHERE admitted<=? AND state!='flight'", (now - ID_TTL,))
         self.db.execute("DELETE FROM days WHERE bucket<=?", (int(now // ID_TTL) - 30,))
-        for key, (created, _) in list(self.cache.items()):
+        for key, (created, _, _) in list(self.cache.items()):
             if created + CACHE_TTL <= now:
                 del self.cache[key]
 
@@ -96,7 +96,10 @@ class SQLiteLedger:
                 if row['state'] == 'flight':
                     raise ServiceError("request_in_progress")
                 if row['state'] == 'confirmed' and request_id in self.cache:
-                    return Admission(self.cache[request_id][1])
+                    _, outcome, cancelled = self.cache[request_id]
+                    if cancelled is None or not cancelled.is_set():
+                        return Admission(outcome)
+                    del self.cache[request_id]
                 raise ServiceError("request_conflict")
             if self.db.execute("SELECT value FROM meta WHERE key='halt'").fetchone()[0]:
                 raise ServiceError("upstream_unavailable")
@@ -129,7 +132,7 @@ class SQLiteLedger:
         # deadline. Slow disk cannot turn an already returned timeout into replay.
         if (cacheable and outcome and (deadline is None or time.monotonic() < deadline)
                 and (cancelled is None or not cancelled.is_set())):
-            self.cache[request_id] = (now, outcome)
+            self.cache[request_id] = (now, outcome, cancelled)
             while len(self.cache) > 100:
                 self.cache.popitem(last=False)
 

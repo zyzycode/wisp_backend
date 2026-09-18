@@ -7,6 +7,7 @@ from wisp_backend.contracts import ProviderResult, Usage, ReplyContext
 from wisp_backend.json_codec import decode_json
 from wisp_backend.schemas import ModelReply
 from wisp_backend.memory_schemas import MemoryModelReply
+from wisp_backend.events_schemas import EventModelReply
 
 MAX_UPSTREAM_BYTES = 256 * 1024
 
@@ -19,7 +20,7 @@ class GroqProvider:
                        timeout: float, reply_context: ReplyContext = ReplyContext()) -> ProviderResult:
         payload = {
             "model": settings.model, "messages": messages, "stream": False,
-            "max_completion_tokens": settings.max_output_tokens,
+            "max_completion_tokens": min(settings.max_output_tokens, 1024) if reply_context.mode == 'event' else settings.max_output_tokens,
             "response_format": {"type": "json_object"},
         }
         if settings.temperature is not None:
@@ -45,7 +46,8 @@ class GroqProvider:
                     proposed = choice["message"]["content"]
                     if not isinstance(proposed, str):
                         return ProviderResult(usage=usage, error="invalid_model_response")
-                    model_type = MemoryModelReply if reply_context.version == 2 else ModelReply
+                    model_type = (EventModelReply if reply_context.mode == 'event' else
+                                  MemoryModelReply if reply_context.version in (2, 3) else ModelReply)
                     reply = model_type.model_validate(decode_json(proposed), context={'evidence_quote': reply_context.evidence_quote})
                     return ProviderResult(reply, usage)
                 except (ValueError, KeyError, IndexError, TypeError, ValidationError, RecursionError):

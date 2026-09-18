@@ -11,6 +11,8 @@ from wisp_backend.service import failure
 MAX_REQUEST_BYTES = 32 * 1024
 MAX_RESPONSE_BYTES = 16 * 1024
 BODY_TIMEOUT = 2
+EVENT_BODY_TIMEOUT = 0.5
+ENDPOINT_VERSIONS = {"/v1/chat": 1, "/v2/chat": 2, "/v3/events": 3, "/v3/chat": 3}
 
 
 def error_response(code, request_id=None, retry_after_ms=None, version=1):
@@ -23,10 +25,10 @@ class ChatBoundary:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["path"] not in ("/v1/chat", "/v2/chat") or scope["method"] != "POST":
+        if scope["type"] != "http" or scope["path"] not in ENDPOINT_VERSIONS or scope["method"] != "POST":
             return await self.app(scope, receive, send)
         started = asyncio.get_running_loop().time()
-        version = 2 if scope["path"] == "/v2/chat" else 1
+        version = ENDPOINT_VERSIONS[scope["path"]]
         scope.setdefault("state", {})['wire_version'] = version
         headers = dict(scope["headers"])
         content_type = headers.get(b"content-type", b"").decode("latin-1").lower()
@@ -46,7 +48,10 @@ class ChatBoundary:
                 if not message.get("more_body", False):
                     return None
         try:
-            error = await asyncio.wait_for(read(), BODY_TIMEOUT)
+            body_deadline = started + (EVENT_BODY_TIMEOUT if scope['path'] == '/v3/events' else BODY_TIMEOUT)
+            error = await asyncio.wait_for(read(), max(0, body_deadline - asyncio.get_running_loop().time()))
+            if asyncio.get_running_loop().time() >= body_deadline:
+                error = 'invalid_request'
         except asyncio.TimeoutError:
             error = "invalid_request"
         if error == "disconnected":
